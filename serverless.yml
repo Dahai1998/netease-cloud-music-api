@@ -1,0 +1,20 @@
+component: http
+name: netease-cloud-music-api
+inputs:
+  region: ap-shanghai
+  src:
+    src: ./
+    exclude:
+      - .env
+      - 'node_modules/**'
+  faas:
+    framework: express
+    runtime: Nodejs16.13   # 关键：这里明确指定了 Node.js 16
+    name: netease-cloud-music-api
+    timeout: 15
+    memorySize: 512
+  apigw:
+    isDisabled: false
+    protocols:
+      - http
+      - https
