@@ -279,46 +279,6 @@ async function consturctServer(moduleDefs) {
     })
   }
 
-  // ===================== ESP32 流媒体接口（优化：直接调用本地模块，无内部HTTP请求）=====================
-  app.get('/stream_pcm', async (req, res) => {
-    try {
-      const { song, artist } = req.query;
-      if (!song) return res.status(400).send('缺少song参数');
-      const keyword = artist ? `${song} ${artist}` : song;
-
-      // 1. 直接加载搜索模块，不发起本地HTTP，规避容器环回失败
-      const searchModule = require('./module/search.js');
-      const searchResult = await searchModule({ keywords: keyword }, (...params) => request(...params));
-      const songList = searchResult.result.songs;
-
-      if (!songList || songList.length === 0) {
-        return res.status(404).send('未搜到对应歌曲');
-      }
-      const songId = songList[0].id;
-
-      // 2. 直接加载获取播放地址模块
-      const urlModule = require('./module/song_url.js');
-      const urlData = await urlModule({ id: songId }, (...params) => request(...params));
-      const audioSource = urlData.data[0];
-
-      if (!audioSource?.url) {
-        return res.status(403).send('该歌曲受版权/VIP限制，无法获取播放流');
-      }
-
-      // 3. 流式转发音频
-      const audioStream = await axios({
-        url: audioSource.url,
-        method: 'GET',
-        responseType: 'stream'
-      });
-      res.setHeader('Content-Type', audioStream.headers['content-type'] || 'audio/mpeg');
-      audioStream.data.pipe(res);
-    } catch (err) {
-      console.error('流媒体接口异常：', err);
-      res.status(500).send('服务器获取音频失败');
-    }
-  });
-  // ==============================================================================
 
   return app
 }
