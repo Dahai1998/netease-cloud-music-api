@@ -193,7 +193,7 @@ async function consturctServer(moduleDefs) {
           })
           return
         }
-        if (moduleResponse.body.code == '301') moduleResponse.body.msg = 'need login'
+        if (moduleResponse.body.code == '301') moduleResponse.body.msg = '需要登录'
         if (!query.noCookie) res.append('Set-Cookie', moduleResponse.cookie)
         res.status(moduleResponse.status).send(moduleResponse.body)
       }
@@ -210,7 +210,7 @@ async function serveNcmApi(options) {
     options.checkVersion &&
     checkVersion().then(({ npmVersion, ourVersion, status }) => {
       if (status == VERSION_CHECK_RESULT.NOT_LATEST) {
-        console.log(`newest:${npmVersion},current:${ourVersion},please update`)
+        console.log(`最新版本: ${npmVersion}, 当前版本: ${ourVersion}, 请及时更新`)
       }
     })
   const constructServerSubmission = consturctServer(options.moduleDefs)
