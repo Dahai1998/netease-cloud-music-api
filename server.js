@@ -200,9 +200,6 @@ async function consturctServer(moduleDefs) {
     })
   }
 
-  // 【内置无报错stream_pcm 单行压缩 无中文 无console】
-  app.get('/stream_pcm',async (req,res)=>{try{const {song,artist}=req.query;if(!song)return res.send("missing song param");const keyword=artist?`${song} ${artist}`:song;const cookie=req.cookies;const searchMod=require("./module/search.js");const searchRes=await searchMod({keywords:keyword,cookie},(...p)=>request(...p));const songList=searchRes.result.songs;if(!songList||songList.length===0)return res.send("no matching song");const songId=songList[0].id;const urlMod=require("./module/song_url.js");const urlRes=await urlMod({id:songId,cookie},(...p)=>request(...p));const audioItem=urlRes.data[0];if(!audioItem||!audioItem.url)return res.send("audio source unavailable");const axios=require("axios");const streamResp=await axios({url:audioItem.url,method:"GET",responseType:"stream",timeout:10000});res.setHeader("Content-Type",streamResp.headers["content-type"]||"audio/mpeg");streamResp.data.pipe(res);}catch(e){res.send("audio fetch failed");}});
-
   return app
 }
 
@@ -219,7 +216,6 @@ async function serveNcmApi(options) {
   const constructServerSubmission = consturctServer(options.moduleDefs)
   const [_, app] = await Promise.all([checkVersionSubmission, constructServerSubmission])
   const appExt = app
-  // 已彻底删除重复app.listen监听代码，避免端口冲突502
   return appExt
 }
 
