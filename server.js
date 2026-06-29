@@ -280,7 +280,7 @@ async function consturctServer(moduleDefs) {
     })
   }
 
-  // ===================== ESP32 流媒体接口（修正作用域，函数内部）=====================
+  // ===================== ESP32 流媒体接口（函数内部，修复作用域报错）=====================
   app.get('/stream_pcm', async (req, res) => {
     try {
       const { song, artist } = req.query;
