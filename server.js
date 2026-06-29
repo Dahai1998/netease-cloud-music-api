@@ -1,6 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const express = require('express')
+const axios = require('axios');
 const request = require('./util/request')
 const packageJSON = require('./package.json')
 const exec = require('child_process').exec
@@ -162,7 +163,6 @@ async function consturctServer(moduleDefs) {
    */
   app.use((req, _, next) => {
     req.cookies = {}
-    //;(req.headers.cookie || '').split(/\s*;\s*/).forEach((pair) => { //  Polynomial regular expression //
     ;(req.headers.cookie || '').split(/;\s+|(?<!\s)\s+$/g).forEach((pair) => {
       let crack = pair.indexOf('=')
       if (crack < 1 || crack == pair.length - 1) return
@@ -231,7 +231,6 @@ async function consturctServer(moduleDefs) {
           if (ip == '::1') {
             ip = global.cnIp
           }
-          // console.log(ip)
           obj[3] = {
             ...obj[3],
             ip,
@@ -244,7 +243,6 @@ async function consturctServer(moduleDefs) {
         if (!query.noCookie) {
           if (Array.isArray(cookies) && cookies.length > 0) {
             if (req.protocol === 'https') {
-              // Try to fix CORS SameSite Problem
               res.append(
                 'Set-Cookie',
                 cookies.map((cookie) => {
@@ -281,6 +279,44 @@ async function consturctServer(moduleDefs) {
     })
   }
 
+  // ESP32专用一站式流媒体接口
+  app.get('/stream_pcm', async (req, res) => {
+    try {
+      const { song, artist } = req.query;
+      if (!song) return res.status(400).send('缺少song参数');
+      const keyword = artist ? `${song} ${artist}` : song;
+      const cookie = req.cookies;
+
+      const searchModule = require('./module/search.js');
+      const searchRes = await searchModule({ keywords: keyword, cookie }, (...params) => request(...params));
+      const songList = searchRes.result.songs;
+      if (!songList || songList.length === 0) {
+        return res.status(404).send('未搜到对应歌曲');
+      }
+      const songId = songList[0].id;
+
+      const urlModule = require('./module/song_url.js');
+      const urlRes = await urlModule({ id: songId, cookie }, (...params) => request(...params));
+      const audioSource = urlRes.data[0];
+
+      if (!audioSource?.url) {
+        return res.status(403).send('该歌曲受VIP/版权限制，无可用播放源');
+      }
+
+      const audioStream = await axios({
+        url: audioSource.url,
+        method: 'GET',
+        responseType: 'stream',
+        timeout: 10000
+      });
+      res.setHeader('Content-Type', audioStream.headers['content-type'] || 'audio/mpeg');
+      audioStream.data.pipe(res);
+    } catch (err)
+      console.error('stream_pcm 接口异常：', err.message);
+      res.status(500).send(`音频拉取失败：${err.message}`);
+    }
+  });
+
   return app
 }
 
@@ -304,20 +340,14 @@ async function serveNcmApi(options) {
     })
   const constructServerSubmission = consturctServer(options.moduleDefs)
 
-  const[_,app]=await Promise.all([
+  const [_, app] = await Promise.all([
     checkVersionSubmission,
     constructServerSubmission,
-]);
+  ]);
 
-const appExt = app;
-// 覆盖监听配置，确保监听 0.0.0.0 和 PORT 环境变量
-const listenPort = process.env.PORT || 9000;
-const listenHost = '0.0.0.0';
-appExt.server = app.listen(listenPort, listenHost, () => {
-    console.log(`server running @ http://${listenHost}:${listenPort}`);
-});
-
-return appExt;
+  const appExt = app;
+  // 已删除重复listen端口监听代码
+  return appExt;
 }
 
 module.exports = {
