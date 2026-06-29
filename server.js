@@ -134,7 +134,6 @@ async function checkVersion() {
  */
 async function consturctServer(moduleDefs) {
   const app = express()
-  const localPort = process.env.PORT || 9000;
   const { CORS_ALLOW_ORIGIN } = process.env
   app.set('trust proxy', true)
 
@@ -280,31 +279,33 @@ async function consturctServer(moduleDefs) {
     })
   }
 
-  // ===================== ESP32 流媒体接口（函数内部，修复作用域报错）=====================
+  // ===================== ESP32 流媒体接口（优化：直接调用本地模块，无内部HTTP请求）=====================
   app.get('/stream_pcm', async (req, res) => {
     try {
       const { song, artist } = req.query;
       if (!song) return res.status(400).send('缺少song参数');
-
-      // 拼接搜索关键词
       const keyword = artist ? `${song} ${artist}` : song;
-      // 调用自身搜索接口，统一使用内部端口变量
-      const searchResult = await axios.get(`http://127.0.0.1:${localPort}/search?keywords=${encodeURIComponent(keyword)}`);
-      const songList = searchResult.data.result.songs;
+
+      // 1. 直接加载搜索模块，不发起本地HTTP，规避容器环回失败
+      const searchModule = require('./module/search.js');
+      const searchResult = await searchModule({ keywords: keyword }, (...params) => request(...params));
+      const songList = searchResult.result.songs;
 
       if (!songList || songList.length === 0) {
         return res.status(404).send('未搜到对应歌曲');
       }
       const songId = songList[0].id;
 
-      // 获取歌曲播放直链
-      const urlData = await axios.get(`http://127.0.0.1:${localPort}/song/url?id=${songId}`);
-      const audioSource = urlData.data.data[0];
+      // 2. 直接加载获取播放地址模块
+      const urlModule = require('./module/song_url.js');
+      const urlData = await urlModule({ id: songId }, (...params) => request(...params));
+      const audioSource = urlData.data[0];
+
       if (!audioSource?.url) {
         return res.status(403).send('该歌曲受版权/VIP限制，无法获取播放流');
       }
 
-      // 流式转发音频给ESP32
+      // 3. 流式转发音频
       const audioStream = await axios({
         url: audioSource.url,
         method: 'GET',
@@ -348,13 +349,7 @@ async function serveNcmApi(options) {
   ]);
 
   const appExt = app;
-  // 覆盖监听配置，确保监听 0.0.0.0 和 PORT 环境变量
-  const listenPort = process.env.PORT || 9000;
-  const listenHost = '0.0.0.0';
-  appExt.server = app.listen(listenPort, listenHost, () => {
-    console.log(`server running @ http://${listenHost}:${listenPort}`);
-  });
-
+  // 已删除重复listen端口代码，交给原生框架外部监听
   return appExt;
 }
 
