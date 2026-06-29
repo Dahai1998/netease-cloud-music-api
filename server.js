@@ -1,7 +1,6 @@
 const fs = require('fs')
 const path = require('path')
 const express = require('express')
-const axios = require('axios');
 const request = require('./util/request')
 const packageJSON = require('./package.json')
 const exec = require('child_process').exec
@@ -163,6 +162,7 @@ async function consturctServer(moduleDefs) {
    */
   app.use((req, _, next) => {
     req.cookies = {}
+    //;(req.headers.cookie || '').split(/\s*;\s*/).forEach((pair) => { //  Polynomial regular expression //
     ;(req.headers.cookie || '').split(/;\s+|(?<!\s)\s+$/g).forEach((pair) => {
       let crack = pair.indexOf('=')
       if (crack < 1 || crack == pair.length - 1) return
@@ -231,6 +231,7 @@ async function consturctServer(moduleDefs) {
           if (ip == '::1') {
             ip = global.cnIp
           }
+          // console.log(ip)
           obj[3] = {
             ...obj[3],
             ip,
@@ -243,6 +244,7 @@ async function consturctServer(moduleDefs) {
         if (!query.noCookie) {
           if (Array.isArray(cookies) && cookies.length > 0) {
             if (req.protocol === 'https') {
+              // Try to fix CORS SameSite Problem
               res.append(
                 'Set-Cookie',
                 cookies.map((cookie) => {
@@ -279,7 +281,6 @@ async function consturctServer(moduleDefs) {
     })
   }
 
-
   return app
 }
 
@@ -303,14 +304,20 @@ async function serveNcmApi(options) {
     })
   const constructServerSubmission = consturctServer(options.moduleDefs)
 
-  const [_, app] = await Promise.all([
+  const[_,app]=await Promise.all([
     checkVersionSubmission,
     constructServerSubmission,
-  ]);
+]);
 
-  const appExt = app;
-  // 已删除重复listen端口代码，交给原生框架外部监听
-  return appExt;
+const appExt = app;
+// 覆盖监听配置，确保监听 0.0.0.0 和 PORT 环境变量
+const listenPort = process.env.PORT || 9000;
+const listenHost = '0.0.0.0';
+appExt.server = app.listen(listenPort, listenHost, () => {
+    console.log(`server running @ http://${listenHost}:${listenPort}`);
+});
+
+return appExt;
 }
 
 module.exports = {
